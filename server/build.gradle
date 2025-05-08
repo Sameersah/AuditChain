@@ -50,3 +50,7 @@ sourceSets {
         }
     }
 }
+
+apply plugin: 'application'
+
+mainClassName = 'com.codecatalyst.auditchain.grpc.Main'

@@ -4,7 +4,7 @@ package blockchain;
 
 option go_package = "github.com/sameersah/auditchain/block_chain/common";
 option java_package = "com.codecatalyst.auditchain.proto.blockchain";
-option java_outer_classname = "BlockchainProto";
+option java_outer_classname = "BlockChainProto";
 
 import "common.proto";
 

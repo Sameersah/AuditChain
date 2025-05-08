@@ -6,12 +6,13 @@ import io.grpc.ServerBuilder;
 public class Main {
     public static void main(String[] args) throws Exception {
         Server server = ServerBuilder
-                .forPort(50051)
+                .forPort(50052)
                 .addService(new FileAuditServiceImpl())
+                .addService(new BlockChainServiceImpl())
                 .build();
 
         server.start();
-        System.out.println("gRPC Server started on port 50051");
+        System.out.println("gRPC Server started on port 50052");
         server.awaitTermination();
     }
 }
