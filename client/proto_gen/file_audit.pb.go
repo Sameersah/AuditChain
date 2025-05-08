@@ -212,7 +212,8 @@ const file_file_audit_proto_rawDesc = "" +
 	"\fmerkle_proof\x18\x06 \x03(\tR\vmerkleProof\x12!\n" +
 	"\faudit_hashes\x18\a \x03(\tR\vauditHashes2R\n" +
 	"\x10FileAuditService\x12>\n" +
-	"\vSubmitAudit\x12\x11.common.FileAudit\x1a\x1c.fileaudit.FileAuditResponseB6Z4github.com/sameersah/auditchain/proto_gen/file_auditb\x06proto3"
+	"\vSubmitAudit\x12\x11.common.FileAudit\x1a\x1c.fileaudit.FileAuditResponseBs\n" +
+	"+com.codecatalyst.auditchain.proto.fileauditB\x0eFileAuditProtoZ4github.com/sameersah/auditchain/proto_gen/file_auditb\x06proto3"
 
 var (
 	file_file_audit_proto_rawDescOnce sync.Once

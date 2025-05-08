@@ -3,6 +3,8 @@ syntax = "proto3";
 package common;
 
 option go_package = "github.com/sameersah/auditchain/proto_gen/common";
+option java_package = "com.codecatalyst.auditchain.proto.common";
+option java_outer_classname = "CommonProto";
 
 enum AccessType {
   UNKNOWN = 0;

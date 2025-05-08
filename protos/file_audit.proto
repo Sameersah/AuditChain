@@ -3,6 +3,8 @@ syntax = "proto3";
 package fileaudit;
 
 option go_package = "github.com/sameersah/auditchain/proto_gen/file_audit";
+option java_package = "com.codecatalyst.auditchain.proto.fileaudit";
+option java_outer_classname = "FileAuditProto";
 
 import "common.proto";
 

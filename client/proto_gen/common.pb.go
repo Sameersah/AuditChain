@@ -301,7 +301,8 @@ const file_common_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x03\x12\n" +
 	"\n" +
-	"\x06DELETE\x10\x04B2Z0github.com/sameersah/auditchain/proto_gen/commonb\x06proto3"
+	"\x06DELETE\x10\x04Bi\n" +
+	"(com.codecatalyst.auditchain.proto.commonB\vCommonProtoZ0github.com/sameersah/auditchain/proto_gen/commonb\x06proto3"
 
 var (
 	file_common_proto_rawDescOnce sync.Once

@@ -391,7 +391,8 @@ const file_block_chain_proto_rawDesc = "" +
 	"\x11BlockChainService\x12E\n" +
 	"\x13WhisperAuditRequest\x12\x11.common.FileAudit\x1a\x1b.blockchain.WhisperResponse\x12H\n" +
 	"\fProposeBlock\x12\x19.blockchain.BlockProposal\x1a\x1d.blockchain.BlockVoteResponse\x12>\n" +
-	"\vVoteOnBlock\x12\x10.blockchain.Vote\x1a\x1d.blockchain.BlockVoteResponseB4Z2github.com/sameersah/auditchain/block_chain/commonb\x06proto3"
+	"\vVoteOnBlock\x12\x10.blockchain.Vote\x1a\x1d.blockchain.BlockVoteResponseBs\n" +
+	",com.codecatalyst.auditchain.proto.blockchainB\x0fBlockchainProtoZ2github.com/sameersah/auditchain/block_chain/commonb\x06proto3"
 
 var (
 	file_block_chain_proto_rawDescOnce sync.Once
