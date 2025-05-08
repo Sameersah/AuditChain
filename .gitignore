@@ -1,0 +1,63 @@
+# ========================================
+# Global ignores
+# ========================================
+.DS_Store
+*.log
+*.tmp
+*.swp
+
+# ========================================
+# Go (client-go/)
+# ========================================
+client/proto_gen/
+client/bin/
+client/keys/
+client/*.exe
+client/*.test
+client/coverage.out
+
+# Go module cache
+client/go.sum
+client/go.mod # (Keep this unless generated)
+
+# ========================================
+# Java/Gradle (server-java/)
+# ========================================
+server/build/
+server/.gradle/
+server/out/
+server/keys/
+
+# Gradle wrapper cache
+.gradle/
+build/
+
+# IntelliJ / JetBrains IDE
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# ========================================
+# Protobuf / gRPC
+# ========================================
+*.pb.go
+*.pb.cc
+*.pb.h
+*.pb.java
+*.pb.c
+*_grpc.pb.*
+
+# ========================================
+# Secrets or RSA keys
+# ========================================
+**/id_rsa
+**/id_rsa.pub
+
+# ========================================
+# OS-specific
+# ========================================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
