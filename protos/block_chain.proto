@@ -2,11 +2,11 @@ syntax = "proto3";
 
 package blockchain;
 
-option go_package = "github.com/sameersah/auditchain/block_chain/common";
+option go_package = "github.com/sameersah/auditchain/proto_gen/block_chain";
 option java_package = "com.codecatalyst.auditchain.proto.blockchain";
 option java_outer_classname = "BlockChainProto";
 
-import "common.proto";
+import "protos/common.proto";
 
 message WhisperResponse {
   string status = 1;         // "success", "failure"
