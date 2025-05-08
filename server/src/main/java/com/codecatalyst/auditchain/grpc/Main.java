@@ -13,6 +13,12 @@ public class Main {
 
         server.start();
         System.out.println("gRPC Server started on port 50052");
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("\nShutting down server...");
+            FileAuditServiceImpl.getMempool().printMempool();
+        }));
+
         server.awaitTermination();
     }
 }

@@ -20,4 +20,23 @@ public class Mempool {
     public synchronized void clear() {
         audits.clear();
     }
+
+    public synchronized void printMempool() {
+        System.out.println("\n=== Mempool Contents ===");
+        System.out.println("Total audits in mempool: " + audits.size());
+        System.out.println("------------------------");
+        
+        for (CommonProto.FileAudit audit : audits) {
+            System.out.println("\nAudit Details:");
+            System.out.println("Request ID: " + audit.getReqId());
+            System.out.println("File ID: " + audit.getFileInfo().getFileId());
+            System.out.println("File Name: " + audit.getFileInfo().getFileName());
+            System.out.println("User ID: " + audit.getUserInfo().getUserId());
+            System.out.println("User Name: " + audit.getUserInfo().getUserName());
+            System.out.println("Access Type: " + audit.getAccessType());
+            System.out.println("Timestamp: " + audit.getTimestamp());
+            System.out.println("------------------------");
+        }
+        System.out.println("=== End of Mempool ===\n");
+    }
 }
