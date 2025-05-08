@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package fileaudit;
 
+option go_package = "github.com/sameersah/auditchain/proto_gen/file_audit";
+
 import "common.proto";
 
 message FileAuditResponse {

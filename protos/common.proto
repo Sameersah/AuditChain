@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package common;
 
+option go_package = "github.com/sameersah/auditchain/proto_gen/common";
+
 enum AccessType {
   UNKNOWN = 0;
   READ = 1;
@@ -11,7 +13,7 @@ enum AccessType {
 }
 
 message FileInfo {
-  string file_id = 1;       /
+  string file_id = 1;
   string file_name = 2;
 }
 
