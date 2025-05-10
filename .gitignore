@@ -16,9 +16,7 @@ client/*.exe
 client/*.test
 client/coverage.out
 
-# Go module cache
-client/go.sum
-client/go.mod # (Keep this unless generated)
+
 
 # ========================================
 # Java/Gradle (server-java/)

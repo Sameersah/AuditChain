@@ -6,7 +6,7 @@ option go_package = "github.com/sameersah/auditchain/proto_gen/block_chain";
 option java_package = "com.codecatalyst.auditchain.proto.blockchain";
 option java_outer_classname = "BlockChainProto";
 
-import "protos/common.proto";
+import "common.proto";
 
 message WhisperResponse {
   string status = 1;         // "success", "failure"
