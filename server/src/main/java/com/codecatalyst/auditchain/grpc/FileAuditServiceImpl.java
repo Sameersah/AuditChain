@@ -15,7 +15,7 @@ public class FileAuditServiceImpl extends FileAuditServiceGrpc.FileAuditServiceI
 
     private final List<String> peerAddresses = Arrays.asList(
             "localhost:50052",
-            "169.254.183.161:50051"
+            "169.254.13.100:50051"
     );
 
     private final WhisperClient whisperClient = new WhisperClient(peerAddresses);

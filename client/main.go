@@ -8,11 +8,13 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"time"
+	"encoding/pem"
 
 	common "github.com/sameersah/auditchain/proto_gen/common"
 	pb "github.com/sameersah/auditchain/proto_gen/file_audit"
@@ -28,13 +30,11 @@ type AuditClient struct {
 }
 
 func NewAuditClient(serverAddr string) (*AuditClient, error) {
-	// Generate RSA key pair
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate RSA key: %v", err)
 	}
 
-	// Connect to server
 	conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %v", err)
@@ -60,35 +60,53 @@ func (c *AuditClient) getPublicKeyPEM() string {
 		log.Fatalf("Failed to marshal public key: %v", err)
 	}
 
-	// Remove PEM encoding and use raw base64
-	return base64.StdEncoding.EncodeToString(publicKeyBytes)
+	pemBlock := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	}
+
+	return string(pem.EncodeToMemory(pemBlock))
 }
 
 func (c *AuditClient) signAudit(audit *common.FileAudit) (string, error) {
-	// Create a hash of the audit data
-	data := audit.ReqId +
-		audit.FileInfo.FileId +
-		audit.FileInfo.FileName +
-		audit.UserInfo.UserId +
-		audit.UserInfo.UserName +
-		audit.AccessType.String() +
-		fmt.Sprintf("%d", audit.Timestamp)
+	// Mimic the Python dict used for signing
+	auditMap := map[string]interface{}{
+		"req_id": audit.ReqId,
+		"file_info": map[string]interface{}{
+			"file_id":   audit.FileInfo.FileId,
+			"file_name": audit.FileInfo.FileName,
+		},
+		"user_info": map[string]interface{}{
+			"user_id":   audit.UserInfo.UserId,
+			"user_name": audit.UserInfo.UserName,
+		},
+		"access_type": audit.AccessType,
+		"timestamp":   audit.Timestamp,
+	}
 
-	// Create SHA256 hash
-	hash := sha256.Sum256([]byte(data))
+	// Marshal to JSON with sorted keys
+	jsonBytes, err := json.Marshal(auditMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal audit map: %v", err)
+	}
 
-	// Sign the hash
+    println("JSON bytes:", string(jsonBytes))
+
+	// Hash the JSON string
+	hash := sha256.Sum256(jsonBytes)
+
+	// Sign using RSA PKCS#1 v1.5 with SHA-256
 	signature, err := rsa.SignPKCS1v15(rand.Reader, c.key, crypto.SHA256, hash[:])
 	if err != nil {
 		return "", fmt.Errorf("failed to sign audit: %v", err)
 	}
 
-	// Use standard base64 encoding
+	// Base64 encode the signature
 	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
 func (c *AuditClient) SubmitAudit(fileID, fileName, userID, userName string, accessType common.AccessType) (*pb.FileAuditResponse, error) {
-	// Create audit record
+	// Construct audit record
 	audit := &common.FileAudit{
 		ReqId: fmt.Sprintf("req_%d", time.Now().UnixNano()),
 		FileInfo: &common.FileInfo{
@@ -111,7 +129,7 @@ func (c *AuditClient) SubmitAudit(fileID, fileName, userID, userName string, acc
 	}
 	audit.Signature = signature
 
-	// Submit to server
+	// Send to server
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -124,22 +142,20 @@ func (c *AuditClient) SubmitAudit(fileID, fileName, userID, userName string, acc
 }
 
 func main() {
-	serverAddr := flag.String("server", "localhost:50051", "The server address in the format of host:port")
-	fileID := flag.String("file-id", "", "File ID to audit")
-	fileName := flag.String("file-name", "", "File name to audit")
-	userID := flag.String("user-id", "", "User ID performing the action")
-	userName := flag.String("user-name", "", "User name performing the action")
+	serverAddr := flag.String("server", "localhost:50051", "The server address")
+	fileID := flag.String("file-id", "", "File ID")
+	fileName := flag.String("file-name", "", "File name")
+	userID := flag.String("user-id", "", "User ID")
+	userName := flag.String("user-name", "", "User name")
 	accessTypeStr := flag.String("access-type", "READ", "Access type (READ, WRITE, UPDATE, DELETE)")
 	flag.Parse()
 
-	// Validate required flags
 	if *fileID == "" || *fileName == "" || *userID == "" || *userName == "" {
 		fmt.Println("Error: All flags are required")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	// Parse access type
 	var accessType common.AccessType
 	switch *accessTypeStr {
 	case "READ":
@@ -155,20 +171,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create client
 	client, err := NewAuditClient(*serverAddr)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 	defer client.Close()
 
-	// Submit audit
 	response, err := client.SubmitAudit(*fileID, *fileName, *userID, *userName, accessType)
 	if err != nil {
 		log.Fatalf("Failed to submit audit: %v", err)
 	}
 
-	// Print response
 	fmt.Printf("Audit submitted successfully!\n")
 	fmt.Printf("Request ID: %s\n", response.ReqId)
 	fmt.Printf("Blockchain TX Hash: %s\n", response.BlockchainTxHash)
@@ -177,7 +190,6 @@ func main() {
 		fmt.Printf("Error: %s\n", response.ErrorMessage)
 	}
 
-	// Print block header information if available
 	if response.BlockHeader != nil {
 		fmt.Printf("\nBlock Information:\n")
 		fmt.Printf("Block Hash: %s\n", response.BlockHeader.BlockHash)
