@@ -17,6 +17,7 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-java-util:3.25.0'
     compileOnly 'org.apache.tomcat:annotations-api:6.0.53'
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.sparkjava:spark-core:2.9.4'
 }
 
 sourceCompatibility = JavaVersion.VERSION_11
@@ -56,3 +57,13 @@ sourceSets {
 apply plugin: 'application'
 
 mainClassName = 'com.codecatalyst.auditchain.grpc.Main'
+
+application {
+    mainClass = 'com.codecatalyst.auditchain.grpc.Main'
+}
+
+run {
+    if (project.hasProperty("args")) {
+        args project.args.split(',')
+    }
+}

@@ -14,7 +14,7 @@ public class FileAuditServiceImpl extends FileAuditServiceGrpc.FileAuditServiceI
     private final Mempool mempool = new Mempool();
 
     private final List<String> peerAddresses = Arrays.asList(
-            "localhost:50052",
+
             "169.254.13.100:50051"
     );
 
