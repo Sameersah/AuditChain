@@ -24,18 +24,42 @@ public class Mempool {
         System.out.println("🧹 Mempool cleared");
     }
 
-    public synchronized boolean removeAudit(String reqId) {
+    public synchronized void removeAudit(String reqId) {
+        // Debug: Log the size of the mempool before attempting removal
+        System.out.println("🔍 Attempting to remove audit. Current mempool size: " + audits.size());
+
+        // Debug: Log the request ID being searched for
+        System.out.println("🔍 Searching for audit with reqId: " + reqId);
+
+        // Create an iterator to traverse the list of audits
         Iterator<CommonProto.FileAudit> it = audits.iterator();
+
+        // Iterate through the mempool to find the audit with the matching reqId
         while (it.hasNext()) {
             CommonProto.FileAudit audit = it.next();
+
+            // Debug: Log the current audit being checked
+            System.out.println("🔍 Checking audit with reqId: " + audit.getReqId());
+
+            // Check if the current audit's reqId matches the one to be removed
             if (audit.getReqId().equals(reqId)) {
+                // If a match is found, remove the audit from the mempool
                 it.remove();
-                System.out.println("🗑️ Removed audit from mempool: " + reqId);
-                return true;
+
+                // Debug: Log successful removal
+                System.out.println("🗑️ Successfully removed audit from mempool: " + reqId);
+
+                // Debug: Log the size of the mempool after removal
+                System.out.println("🔍 Mempool size after removal: " + audits.size());
+                return;
             }
         }
+
+        // If no matching audit is found, log a warning
         System.out.println("⚠️ Audit not found in mempool: " + reqId);
-        return false;
+
+        // Debug: Log the size of the mempool after the search
+        System.out.println("🔍 Mempool size after search: " + audits.size());
     }
 
     public synchronized boolean contains(String reqId) {
@@ -74,5 +98,9 @@ public class Mempool {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    public synchronized int size() {
+        return audits.size();
     }
 }

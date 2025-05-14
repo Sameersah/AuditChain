@@ -1,5 +1,6 @@
 package com.codecatalyst.auditchain.grpc;
 
+import com.codecatalyst.auditchain.config.Config;
 import com.codecatalyst.auditchain.proto.common.CommonProto;
 import com.codecatalyst.auditchain.proto.fileaudit.FileAuditProto;
 import com.codecatalyst.auditchain.proto.fileaudit.FileAuditServiceGrpc;
@@ -13,12 +14,7 @@ public class FileAuditServiceImpl extends FileAuditServiceGrpc.FileAuditServiceI
 
     private final Mempool mempool = new Mempool();
 
-    private final List<String> peerAddresses = Arrays.asList(
-
-            "169.254.13.100:50051"
-    );
-
-    private final WhisperClient whisperClient = new WhisperClient(peerAddresses);
+    private final WhisperClient whisperClient = new WhisperClient(Config.PEER_ADDRESSES);
 
     public static Mempool getMempool() {
         return new FileAuditServiceImpl().mempool;

@@ -42,8 +42,31 @@ message BlockVoteResponse {
   string message = 2;
 }
 
+message TriggerElectionRequest {
+  int64 term = 1;
+  string address = 2;
+}
+
+message TriggerElectionResponse {
+  bool vote = 1;
+  int64 term = 2;
+  string status = 3;
+  string error_message = 4;
+}
+
+message NotifyLeadershipRequest {
+  string address = 1;
+}
+
+message NotifyLeadershipResponse {
+  string status = 1;
+  string error_message = 2;
+}
+
 service BlockChainService {
   rpc WhisperAuditRequest (common.FileAudit) returns (WhisperResponse);
   rpc ProposeBlock (BlockProposal) returns (BlockVoteResponse);
   rpc VoteOnBlock (Vote) returns (BlockVoteResponse);
+  rpc TriggerElection (TriggerElectionRequest) returns (TriggerElectionResponse);
+  rpc NotifyLeadership (NotifyLeadershipRequest) returns (NotifyLeadershipResponse);
 }

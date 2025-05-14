@@ -27,25 +27,7 @@ public class SignatureVerifier {
             PublicKey publicKey = keyFactory.generatePublic(keySpec);
 
             // Step 2: Reconstruct audit JSON map in Go's key order
-            Map<String, Object> auditMap = new LinkedHashMap<>();
-
-            auditMap.put("access_type", audit.getAccessType().getNumber());
-
-            Map<String, Object> fileInfo = new LinkedHashMap<>();
-            fileInfo.put("file_id", audit.getFileInfo().getFileId());
-            fileInfo.put("file_name", audit.getFileInfo().getFileName());
-            auditMap.put("file_info", fileInfo);
-
-            auditMap.put("req_id", audit.getReqId());
-            auditMap.put("timestamp", audit.getTimestamp());
-
-            Map<String, Object> userInfo = new LinkedHashMap<>();
-            userInfo.put("user_id", audit.getUserInfo().getUserId());
-            userInfo.put("user_name", audit.getUserInfo().getUserName());
-            auditMap.put("user_info", userInfo);
-
-            // Step 3: Serialize JSON (same as Go's json.Marshal with sorted keys)
-            String jsonString = gson.toJson(auditMap);
+            String jsonString = getAuditInJsonFormat(audit);
             System.out.println("Reconstructed JSON for verification:\n" + jsonString);
 
             // Step 4: Verify the signature using SHA256withRSA
@@ -66,5 +48,28 @@ public class SignatureVerifier {
             System.err.println("❌ Signature verification failed: " + e.getMessage());
             return false;
         }
+    }
+
+    public static String getAuditInJsonFormat(CommonProto.FileAudit audit) {
+        Map<String, Object> auditMap = new LinkedHashMap<>();
+
+        auditMap.put("access_type", audit.getAccessType().getNumber());
+
+        Map<String, Object> fileInfo = new LinkedHashMap<>();
+        fileInfo.put("file_id", audit.getFileInfo().getFileId());
+        fileInfo.put("file_name", audit.getFileInfo().getFileName());
+        auditMap.put("file_info", fileInfo);
+
+        auditMap.put("req_id", audit.getReqId());
+        auditMap.put("timestamp", audit.getTimestamp());
+
+        Map<String, Object> userInfo = new LinkedHashMap<>();
+        userInfo.put("user_id", audit.getUserInfo().getUserId());
+        userInfo.put("user_name", audit.getUserInfo().getUserName());
+        auditMap.put("user_info", userInfo);
+
+        // Step 3: Serialize JSON (same as Go's json.Marshal with sorted keys)
+        String jsonString = gson.toJson(auditMap);
+        return jsonString;
     }
 }

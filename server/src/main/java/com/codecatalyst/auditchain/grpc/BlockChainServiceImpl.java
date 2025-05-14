@@ -16,17 +16,34 @@ import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.BlockCommitR
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.GetBlockResponse;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.HeartbeatResponse;
 
+import com.codecatalyst.auditchain.election.LeaderStateManager;
+
+import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.TriggerElectionRequest;
+import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.TriggerElectionResponse;
+import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.NotifyLeadershipRequest;
+import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.NotifyLeadershipResponse;
 
 
-import io.grpc.stub.StreamObserver;
+
+
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 
 public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServiceImplBase {
 
     private final Mempool mempool = new Mempool();
+    private volatile String currentLeader = null;
+    private final Map<String, Long> peerHeartbeats = new ConcurrentHashMap<>();
+    private final long HEARTBEAT_TIMEOUT_MS = 15000; // 15s timeout
+    private final String selfAddress = Config.SELF_ADDRESS; // define in config
+
 
     @Override
     public void whisperAuditRequest(CommonProto.FileAudit audit, StreamObserver<BlockChainProto.WhisperResponse> responseObserver) {
@@ -44,20 +61,67 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
     public void proposeBlock(Block request, StreamObserver<BlockVoteResponse> responseObserver) {
         System.out.println("🔷 Received block proposal: block_id = " + request.getId());
 
-        // Verify each audit in the block
-        boolean allValid = request.getAuditsList().stream().allMatch(SignatureVerifier::verify);
+        boolean allValid = true;
+        String errorMessage = "";
 
+        // ✅ Step 1: Verify all audit signatures
+        for (CommonProto.FileAudit audit : request.getAuditsList()) {
+            if (!SignatureVerifier.verify(audit)) {
+                allValid = false;
+                errorMessage = "One or more audit signatures failed verification";
+                break;
+            }
+        }
+
+        // ✅ Step 2: Verify previous block hash
+        if (allValid) {
+            String expectedPreviousHash = BlockStorage.getLastBlockHash();
+            System.out.println("Local Previous Block Hash: " + expectedPreviousHash);
+            if (!expectedPreviousHash.equals(request.getPreviousHash())) {
+                allValid = false;
+                errorMessage = "Previous block hash does not match local chain";
+            }
+        }
+
+        // ✅ Step 3: Verify Merkle root
+        if (allValid) {
+            String computedMerkleRoot = MerkleUtil.computeMerkleRoot(request.getAuditsList());
+            System.out.println("Local Computed Merkle Root: " + computedMerkleRoot);
+            if (!computedMerkleRoot.equals(request.getMerkleRoot())) {
+                allValid = false;
+                errorMessage = "Merkle root mismatch";
+            }
+        }
+
+        // ✅ Step 4: Verify full block hash
+        if (allValid) {
+            String computedBlockHash = HashUtil.computeBlockHash(
+                    (int) request.getId(),
+                    request.getPreviousHash(),
+                    request.getAuditsList(),
+                    request.getMerkleRoot()
+            );
+
+            if (!computedBlockHash.equals(request.getHash())) {
+                allValid = false;
+                errorMessage = "Block hash mismatch";
+            }
+        }
+
+        // ✅ Step 5: Respond with vote
         BlockVoteResponse response = BlockVoteResponse.newBuilder()
                 .setVote(allValid)
                 .setStatus(allValid ? "success" : "failure")
-                .setErrorMessage(allValid ? "" : "One or more audit signatures failed verification")
+                .setErrorMessage(allValid ? "" : errorMessage)
                 .build();
 
         responseObserver.onNext(response);
         responseObserver.onCompleted();
 
-        System.out.println("🔶 Block proposal vote: " + (allValid ? "APPROVED ✅" : "REJECTED ❌"));
+        System.out.println("🔶 Block proposal vote: " + (allValid ? "APPROVED ✅" : "REJECTED ❌ - " + errorMessage));
     }
+
+
 
     @Override
     public void commitBlock(Block request, StreamObserver<BlockChainProto.BlockCommitResponse> responseObserver) {
@@ -105,12 +169,16 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
 
     @Override
     public void sendHeartbeat(BlockChainProto.HeartbeatRequest request, StreamObserver<HeartbeatResponse> responseObserver) {
-        System.out.println("💓 Heartbeat received from: " + request.getFromAddress());
+        System.out.println("Heartbeat received from: " + request.getFromAddress());
         System.out.println("  Leader reported: " + request.getCurrentLeaderAddress());
         System.out.println("  Latest Block ID: " + request.getLatestBlockId());
         System.out.println("  Mempool Size: " + request.getMemPoolSize());
 
-
+        peerHeartbeats.put(request.getFromAddress(), System.currentTimeMillis());
+        request.getCurrentLeaderAddress();
+        if (!request.getCurrentLeaderAddress().isEmpty()) {
+            currentLeader = request.getCurrentLeaderAddress();
+        }
 
         HeartbeatResponse response = BlockChainProto.HeartbeatResponse.newBuilder()
                 .setStatus("success")
@@ -120,6 +188,57 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
+
+
+    @Override
+    public void triggerElection(TriggerElectionRequest request, StreamObserver<TriggerElectionResponse> responseObserver) {
+        System.out.println("🗳️ Received election request from " + request.getAddress() + " with term " + request.getTerm());
+
+        int localBlockId = BlockStorage.getNextBlockId();
+        int incomingTerm = (int) request.getTerm();
+
+        boolean voteGranted = false;
+        String errorMsg = "";
+
+        // Grant vote if this term is newer
+        if (incomingTerm > LeaderStateManager.getCurrentTerm()) {
+            LeaderStateManager.updateTerm(incomingTerm);
+            voteGranted = true;
+            System.out.println("✅ Vote granted to " + request.getAddress());
+        } else {
+            errorMsg = "Received term is not higher than current term";
+            System.out.println("❌ Vote denied to " + request.getAddress() + ": " + errorMsg);
+        }
+
+        TriggerElectionResponse response = TriggerElectionResponse.newBuilder()
+                .setVote(voteGranted)
+                .setTerm(LeaderStateManager.getCurrentTerm())
+                .setStatus("success")
+                .setErrorMessage(voteGranted ? "" : errorMsg)
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void notifyLeadership(NotifyLeadershipRequest request, StreamObserver<NotifyLeadershipResponse> responseObserver) {
+        System.out.println("👑 Leadership notification received: " + request.getAddress());
+        LeaderStateManager.setCurrentLeader(request.getAddress());
+
+        NotifyLeadershipResponse response = NotifyLeadershipResponse.newBuilder()
+                .setStatus("success")
+                .setErrorMessage("")
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+
+
+
+
 
     public void proposeBlockAsLeader() {
         try {
@@ -137,6 +256,7 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
             int blockId = BlockStorage.getNextBlockId();
             String previousHash = BlockStorage.getLastBlockHash();
             String merkleRoot = MerkleUtil.computeMerkleRoot(mempoolAudits);
+            System.out.println("Local Computed Merkle Root: " + merkleRoot);
             String hash = HashUtil.computeBlockHash(blockId, previousHash, mempoolAudits, merkleRoot);
 
             BlockChainProto.Block block = BlockChainProto.Block.newBuilder()
@@ -191,8 +311,14 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
                     }
                 }
 
-                // Commit to local disk
-                BlockStorage.saveBlock(block);
+                // ✅ Commit locally and remove audits from local mempool
+                boolean saved = BlockStorage.saveBlock(block);
+                if (saved) {
+                    for (CommonProto.FileAudit audit : block.getAuditsList()) {
+                        FileAuditServiceImpl.getMempool().removeAudit(audit.getReqId());
+                    }
+                    System.out.println("🧹 Removed committed audits from local mempool.");
+                }
             } else {
                 System.err.println("❌ Not enough votes. Block rejected. Votes: " + positiveVotes + "/" + totalPeers);
             }
@@ -201,6 +327,27 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
             System.err.println("❌ Failed to propose block: " + e.getMessage());
         }
     }
+
+
+    public void startAutoProposalScheduler() {
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                // Check if this node is the current leader
+                if (selfAddress.equals(LeaderStateManager.getCurrentLeader())) {
+                    // Check if mempool has at least 2 audits
+                    if (FileAuditServiceImpl.getMempool().size() >= 2) {
+                        System.out.println("🧠 I am the leader and mempool size >= 2. Proposing block...");
+                        this.proposeBlockAsLeader();
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Error in auto-proposal scheduler: " + e.getMessage());
+            }
+        }, 5, 5, TimeUnit.SECONDS); // Delay 5 sec, run every 5 sec
+    }
+
 
 
 

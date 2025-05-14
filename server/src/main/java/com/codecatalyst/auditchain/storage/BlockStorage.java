@@ -68,10 +68,10 @@ public class BlockStorage {
 
     public static String getLastBlockHash() {
         File dir = new File(BLOCKS_DIR);
-        if (!dir.exists() || dir.listFiles() == null) return "";
+        if (!dir.exists() || dir.listFiles() == null) return "genesis";
 
         File[] blockFiles = dir.listFiles((d, name) -> name.matches("block_\\d+\\.json"));
-        if (blockFiles == null || blockFiles.length == 0) return "";
+        if (blockFiles == null || blockFiles.length == 0) return "genesis";
 
         File latest = Arrays.stream(blockFiles)
                 .max(Comparator.comparingInt(file -> {
@@ -80,7 +80,7 @@ public class BlockStorage {
                 }))
                 .orElse(null);
 
-        if (latest == null) return "";
+        if (latest == null) return "genesis";
 
         try (FileReader reader = new FileReader(latest)) {
             Block.Builder builder = Block.newBuilder();
@@ -90,4 +90,25 @@ public class BlockStorage {
             return "";
         }
     }
+
+    public static long getLatestBlockId() {
+        File dir = new File(BLOCKS_DIR);
+        if (!dir.exists() || dir.listFiles() == null) return -1;
+
+        File[] blockFiles = dir.listFiles((d, name) -> name.matches("block_\\d+\\.json"));
+        if (blockFiles == null || blockFiles.length == 0) return -1;
+
+        return Arrays.stream(blockFiles)
+                .mapToLong(file -> {
+                    try {
+                        String name = file.getName().replace("block_", "").replace(".json", "");
+                        return Long.parseLong(name);
+                    } catch (NumberFormatException e) {
+                        return -1;
+                    }
+                })
+                .max()
+                .orElse(-1);
+    }
+
 }
