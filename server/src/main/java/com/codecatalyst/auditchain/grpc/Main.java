@@ -9,6 +9,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import com.codecatalyst.auditchain.leader.ElectionManager;
+import com.codecatalyst.auditchain.recovery.NodeRecoveryManager;
 
 import static spark.Spark.*;
 
@@ -64,11 +65,22 @@ public class Main {
             } catch (Exception e) {
                 System.err.println("❌ Heartbeat failed: " + e.getMessage());
             }
-        }, 1, 10, TimeUnit.SECONDS);
+        }, 0, 10, TimeUnit.SECONDS);
+
+
+
 
 
         // Start leader election monitor (runs every 5 seconds)
          ElectionManager.startElectionMonitor(Config.NODE_ID);
+         // Start node recovery monitor (runs every 30 seconds)
+         NodeRecoveryManager.startRecoveryMonitor();
+
+
+
+
+
+
 
 
         // Graceful shutdown hook

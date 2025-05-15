@@ -2,7 +2,7 @@ package com.codecatalyst.auditchain.leader;
 
 import com.codecatalyst.auditchain.config.Config;
 import com.codecatalyst.auditchain.grpc.FileAuditServiceImpl;
-import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto;
+
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.TriggerElectionRequest;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.TriggerElectionResponse;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.NotifyLeadershipRequest;
@@ -14,6 +14,7 @@ import io.grpc.ManagedChannelBuilder;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
 
 public class ElectionManager {
@@ -23,21 +24,76 @@ public class ElectionManager {
     private static final Map<String, Long> lastHeartbeats = new ConcurrentHashMap<>();
     private static String currentLeader = null;
     private static int currentTerm = 0;
+    private static final Map<String, Long> peerLatestBlockIds = new ConcurrentHashMap<>();
+
+    public static void updateLatestBlockId(String node, long blockId) {
+        peerLatestBlockIds.put(node, blockId);
+    }
+
+    public static long getHighestKnownBlockId() {
+        return peerLatestBlockIds.values().stream().mapToLong(Long::longValue).max().orElse(-1);
+    }
+
+    public static synchronized int getCurrentTerm() {
+        return currentTerm;
+    }
+
+    public static synchronized void updateTerm(int newTerm) {
+        if (newTerm > currentTerm) {
+            currentTerm = newTerm;
+        }
+    }
+
+    public static synchronized void setCurrentLeader(String leader) {
+        currentLeader = leader;
+        System.out.println("🔄 Leader updated to: " + leader);
+    }
 
     public static void updateHeartbeat(String address) {
         lastHeartbeats.put(address, Instant.now().toEpochMilli());
     }
+
+    private static boolean isLeaderMissing() {
+
+        if(Objects.equals(currentLeader, Config.NODE_ID)) {
+            System.out.println("🔍 currentLeader is self (" + currentLeader + "). Leader is not missing.");
+            return false;
+        }
+        if (currentLeader == null) {
+            System.out.println("🔍 currentLeader is null → leader is missing.");
+            return true;
+        }
+
+        if (!lastHeartbeats.containsKey(currentLeader)) {
+            System.out.println("🔍 lastHeartbeats does not contain currentLeader (" + currentLeader + ") → leader is missing.");
+            return true;
+        }
+
+        long lastSeen = lastHeartbeats.get(currentLeader);
+        long now = Instant.now().toEpochMilli();
+        long delta = now - lastSeen;
+
+        System.out.println("🔍 Last heartbeat from leader " + currentLeader + ": " + lastSeen);
+        System.out.println("🔍 Current time: " + now);
+        System.out.println("🔍 Time since last heartbeat: " + delta + " ms");
+        System.out.println("🔍 HEARTBEAT_TIMEOUT_MS: " + HEARTBEAT_TIMEOUT_MS);
+
+        if (delta > HEARTBEAT_TIMEOUT_MS) {
+            System.out.println("🔍 Time since last heartbeat exceeds threshold → leader is missing.");
+            return true;
+        }
+
+        System.out.println("✅ Leader " + currentLeader + " is alive.");
+        return false;
+    }
+
 
     public static void startElectionMonitor(String selfAddress) {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                boolean leaderMissing = (currentLeader == null)
-                        || !lastHeartbeats.containsKey(currentLeader)
-                        || (Instant.now().toEpochMilli() - lastHeartbeats.getOrDefault(currentLeader, 0L)) > HEARTBEAT_TIMEOUT_MS;
-
-                if (leaderMissing) {
+                if (isLeaderMissing()) {
                     System.out.println("⚠️ Leader is missing or unknown. Triggering election...");
                     triggerElection(selfAddress);
                 }

@@ -1,6 +1,7 @@
 package com.codecatalyst.auditchain.grpc;
 
 import com.codecatalyst.auditchain.config.Config;
+import com.codecatalyst.auditchain.leader.ElectionManager;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainServiceGrpc;
 import com.codecatalyst.auditchain.proto.common.CommonProto;
@@ -16,21 +17,12 @@ import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.BlockCommitR
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.GetBlockResponse;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.HeartbeatResponse;
 
-import com.codecatalyst.auditchain.election.LeaderStateManager;
-
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.TriggerElectionRequest;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.TriggerElectionResponse;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.NotifyLeadershipRequest;
 import com.codecatalyst.auditchain.proto.blockchain.BlockChainProto.NotifyLeadershipResponse;
-
-
-
-
-
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -39,10 +31,7 @@ import java.util.concurrent.TimeUnit;
 public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServiceImplBase {
 
     private final Mempool mempool = new Mempool();
-    private volatile String currentLeader = null;
-    private final Map<String, Long> peerHeartbeats = new ConcurrentHashMap<>();
-    private final long HEARTBEAT_TIMEOUT_MS = 15000; // 15s timeout
-    private final String selfAddress = Config.SELF_ADDRESS; // define in config
+    private final String selfAddress = Config.NODE_ID; // define in config
 
 
     @Override
@@ -169,17 +158,31 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
 
     @Override
     public void sendHeartbeat(BlockChainProto.HeartbeatRequest request, StreamObserver<HeartbeatResponse> responseObserver) {
-        System.out.println("Heartbeat received from: " + request.getFromAddress());
-        System.out.println("  Leader reported: " + request.getCurrentLeaderAddress());
-        System.out.println("  Latest Block ID: " + request.getLatestBlockId());
-        System.out.println("  Mempool Size: " + request.getMemPoolSize());
+        System.out.println("\n💓 ===== Incoming Heartbeat =====");
+        System.out.println("📬 From Node       : " + request.getFromAddress());
+        System.out.println("👑 Reported Leader : " + request.getCurrentLeaderAddress());
+        System.out.println("📦 Latest Block ID : " + request.getLatestBlockId());
+        System.out.println("🧾 Mempool Size    : " + request.getMemPoolSize());
 
-        peerHeartbeats.put(request.getFromAddress(), System.currentTimeMillis());
-        request.getCurrentLeaderAddress();
-        if (!request.getCurrentLeaderAddress().isEmpty()) {
-            currentLeader = request.getCurrentLeaderAddress();
+        // Update internal heartbeat map
+        ElectionManager.updateHeartbeat(request.getFromAddress());
+        System.out.println("🕓 Heartbeat timestamp updated for " + request.getFromAddress());
+        ElectionManager.updateLatestBlockId(request.getFromAddress(), request.getLatestBlockId());
+        // Evaluate and possibly update the current leader
+        String incomingLeader = request.getCurrentLeaderAddress();
+        String localLeader = ElectionManager.getCurrentLeader();
+
+        if (localLeader == null || !incomingLeader.isEmpty() && !incomingLeader.equals(localLeader)) {
+            System.out.println("🔄 Updating current leader from '" + localLeader + "' to '" + incomingLeader + "'");
+            ElectionManager.setCurrentLeader(incomingLeader);
+        } else {
+            System.out.println("ℹ️ No leader change. Current known leader remains: " + localLeader);
         }
 
+        System.out.println("✅ Heartbeat processed successfully from " + request.getFromAddress());
+        System.out.println("==================================\n");
+
+        // Send back successful response
         HeartbeatResponse response = BlockChainProto.HeartbeatResponse.newBuilder()
                 .setStatus("success")
                 .setErrorMessage("")
@@ -188,6 +191,7 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
+
 
 
     @Override
@@ -201,18 +205,18 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
         String errorMsg = "";
 
         // Grant vote if this term is newer
-        if (incomingTerm > LeaderStateManager.getCurrentTerm()) {
-            LeaderStateManager.updateTerm(incomingTerm);
+        /*if (incomingTerm > ElectionManager.getCurrentTerm()) {
+            ElectionManager.updateTerm(incomingTerm);
             voteGranted = true;
             System.out.println("✅ Vote granted to " + request.getAddress());
         } else {
             errorMsg = "Received term is not higher than current term";
             System.out.println("❌ Vote denied to " + request.getAddress() + ": " + errorMsg);
-        }
+        }*/
 
         TriggerElectionResponse response = TriggerElectionResponse.newBuilder()
                 .setVote(voteGranted)
-                .setTerm(LeaderStateManager.getCurrentTerm())
+                .setTerm(ElectionManager.getCurrentTerm())
                 .setStatus("success")
                 .setErrorMessage(voteGranted ? "" : errorMsg)
                 .build();
@@ -224,8 +228,8 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
     @Override
     public void notifyLeadership(NotifyLeadershipRequest request, StreamObserver<NotifyLeadershipResponse> responseObserver) {
         System.out.println("👑 Leadership notification received: " + request.getAddress());
-        LeaderStateManager.setCurrentLeader(request.getAddress());
-
+        System.out.println("🔄 Current leader updated to: " + request.getAddress());
+        ElectionManager.setCurrentLeader(request.getAddress());
         NotifyLeadershipResponse response = NotifyLeadershipResponse.newBuilder()
                 .setStatus("success")
                 .setErrorMessage("")
@@ -243,11 +247,16 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
     public void proposeBlockAsLeader() {
         try {
             // Step 1: Get audits from mempool
-            List<CommonProto.FileAudit> mempoolAudits = Mempool.getAll();
-            if (mempoolAudits.isEmpty()) {
+            List<CommonProto.FileAudit> allAudits = Mempool.getAll();
+            if (allAudits.isEmpty()) {
                 System.out.println("ℹ️ No audits in mempool. Skipping block proposal.");
                 return;
             }
+
+             // ✅ Sort by timestamp and pick top 3
+            allAudits.sort(Comparator.comparingLong(CommonProto.FileAudit::getTimestamp));
+            List<CommonProto.FileAudit> mempoolAudits = allAudits.subList(0, Math.min(3, allAudits.size()));
+
 
             // Step 2: Sort audits
             mempoolAudits.sort(Comparator.comparingLong(CommonProto.FileAudit::getTimestamp));
@@ -335,10 +344,10 @@ public class BlockChainServiceImpl extends BlockChainServiceGrpc.BlockChainServi
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 // Check if this node is the current leader
-                if (selfAddress.equals(LeaderStateManager.getCurrentLeader())) {
+                if (selfAddress.equals(ElectionManager.getCurrentLeader())) {
                     // Check if mempool has at least 2 audits
-                    if (FileAuditServiceImpl.getMempool().size() >= 2) {
-                        System.out.println("🧠 I am the leader and mempool size >= 2. Proposing block...");
+                    if (FileAuditServiceImpl.getMempool().size() >= 3) {
+                        System.out.println("🧠 I am the leader and mempool size == 3. Proposing block...");
                         this.proposeBlockAsLeader();
                     }
                 }
