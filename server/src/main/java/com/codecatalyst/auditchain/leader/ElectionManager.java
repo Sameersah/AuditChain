@@ -109,7 +109,7 @@ public class ElectionManager {
 
         int votes = 1; // Vote for self
         currentTerm++;
-
+        int inactivePeers = 0;
         for (String peer : Config.PEER_ADDRESSES) {
             try {
                 ManagedChannel channel = ManagedChannelBuilder.forTarget(peer).usePlaintext().build();
@@ -130,11 +130,12 @@ public class ElectionManager {
 
                 channel.shutdown();
             } catch (Exception e) {
+                inactivePeers++;
                 System.err.println("❌ Failed to request vote from " + peer + ": " + e.getMessage());
             }
         }
 
-        int majority = (Config.PEER_ADDRESSES.size() + 1) / 2 + 1;
+        int majority = (Config.PEER_ADDRESSES.size()-inactivePeers + 1) / 2 + 1;
         if (votes >= majority) {
             System.out.println("🗳️ Election won. Becoming new leader.");
             currentLeader = selfAddress;
